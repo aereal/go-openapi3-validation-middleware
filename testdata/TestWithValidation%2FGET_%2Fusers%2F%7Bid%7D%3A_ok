@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Content-Length: 38
+Content-Type: application/json
+Date: Thu, 10 Jun 2021 12:58:45 GMT
+
+{"name":"aereal","id":"123","age":17}
+HTTP/1.1 200 OK
+Content-Length: 38
+Content-Type: application/json
+Date: Thu, 10 Jun 2021 13:15:21 GMT
+
+{"name":"aereal","id":"123","age":17}
