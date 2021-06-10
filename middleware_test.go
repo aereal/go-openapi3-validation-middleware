@@ -45,7 +45,7 @@ func TestWithValidation(t *testing.T) {
 			name: "GET /users/{id}: ok",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodGet, origin+"/users/123", map[string]string{}, ""))
@@ -55,7 +55,7 @@ func TestWithValidation(t *testing.T) {
 			name: "GET /users/{id}: response error",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"name": "aereal", "age": 17})
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": "aereal", "age": 17})
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodGet, origin+"/users/123", map[string]string{}, ""))
@@ -65,7 +65,7 @@ func TestWithValidation(t *testing.T) {
 			name: "POST /users: ok",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodPost, origin+"/users", map[string]string{"content-type": "application/json"}, `{"name":"aereal","age":17}`))
@@ -75,7 +75,7 @@ func TestWithValidation(t *testing.T) {
 			name: "POST /users: request error",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodPost, origin+"/users", map[string]string{"content-type": "application/json"}, `{"name":"aereal","age":"abc"}`))
