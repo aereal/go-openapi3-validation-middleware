@@ -84,7 +84,7 @@ func TestWithValidation(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			srv := httptest.NewServer(WithValidation(router)(testCase.handler))
+			srv := httptest.NewServer(WithValidation(MiddlewareOptions{Router: router})(testCase.handler))
 			defer srv.Close()
 			gotResp, err := srv.Client().Do(testCase.request(srv.URL))
 			if err != nil {
