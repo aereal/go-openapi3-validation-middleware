@@ -12,10 +12,32 @@ import (
 
 type middleware = func(next http.Handler) http.Handler
 
+type MiddlewareOptions struct {
+	Router                        routers.Router
+	ReportRequestValidationError  func(w http.ResponseWriter, err error)
+	ReportResponseValidationError func(w http.ResponseWriter, err error)
+}
+
+func (o MiddlewareOptions) reportReqError(w http.ResponseWriter, err error) {
+	if f := o.ReportRequestValidationError; f != nil {
+		f(w, err)
+		return
+	}
+	defaultReportRequestError(w, err)
+}
+
+func (o MiddlewareOptions) reportRespError(w http.ResponseWriter, err error) {
+	if f := o.ReportResponseValidationError; f != nil {
+		f(w, err)
+		return
+	}
+	defaultReportResponseError(w, err)
+}
+
 // WithValidation returns a middleware that validates against both request and response.
-func WithValidation(router routers.Router) middleware {
-	req := WithRequestValidation(router)
-	resp := WithResponseValidation(router)
+func WithValidation(options MiddlewareOptions) middleware {
+	req := WithRequestValidation(options)
+	resp := WithResponseValidation(options)
 	return func(next http.Handler) http.Handler {
 		return req(resp(next))
 	}
@@ -23,13 +45,13 @@ func WithValidation(router routers.Router) middleware {
 
 // WithResponseValidation returns a middleware that validates against response.
 // It may consume larger memory because it holds entire response body to validate it later.
-func WithResponseValidation(router routers.Router) middleware {
+func WithResponseValidation(options MiddlewareOptions) middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			irw := newBufferingResponseWriter(w)
 			next.ServeHTTP(irw, r)
-			ri, err := buildRequestValidationInputFromRequest(router, r)
+			ri, err := buildRequestValidationInputFromRequest(options.Router, r)
 			if err != nil {
 				respondErrorJSON(w, http.StatusInternalServerError, err)
 				return
@@ -45,7 +67,7 @@ func WithResponseValidation(router routers.Router) middleware {
 			bodyBytes := irw.buf.Bytes()
 			input.SetBodyBytes(bodyBytes)
 			if err := openapi3filter.ValidateResponse(ctx, input); err != nil {
-				reportValidationError(w, err)
+				options.reportRespError(w, err)
 				return
 			}
 			irw.emit()
@@ -55,17 +77,17 @@ func WithResponseValidation(router routers.Router) middleware {
 
 // WithRequestValidation returns a middleware that validates against request.
 // It immediately returns an error response and does not call next handler if validation failed.
-func WithRequestValidation(router routers.Router) middleware {
+func WithRequestValidation(options MiddlewareOptions) middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			input, err := buildRequestValidationInputFromRequest(router, r)
+			input, err := buildRequestValidationInputFromRequest(options.Router, r)
 			if err != nil {
 				respondErrorJSON(w, http.StatusInternalServerError, err)
 				return
 			}
 			ctx := r.Context()
 			if err := openapi3filter.ValidateRequest(ctx, input); err != nil {
-				reportValidationError(w, err)
+				options.reportReqError(w, err)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -86,19 +108,6 @@ func buildRequestValidationInputFromRequest(router routers.Router, r *http.Reque
 	return input, nil
 }
 
-func reportValidationError(w http.ResponseWriter, err error) {
-	w.Header().Set("content-type", "application/json")
-	if err, ok := err.(*openapi3filter.RequestError); ok {
-		reportRequestError(w, err)
-		return
-	}
-	if err, ok := err.(*openapi3filter.ResponseError); ok {
-		reportResponseError(w, err)
-		return
-	}
-	respondErrorJSON(w, http.StatusBadRequest, err)
-}
-
 type report struct {
 	Reason      string           `json:"reason"`
 	Field       string           `json:"field"`
@@ -107,7 +116,11 @@ type report struct {
 	OriginError string           `json:"origin,omitempty"`
 }
 
-func reportRequestError(w http.ResponseWriter, requestErr *openapi3filter.RequestError) {
+func defaultReportRequestError(w http.ResponseWriter, err error) {
+	requestErr, ok := err.(*openapi3filter.RequestError)
+	if !ok {
+		return
+	}
 	if schemaErr, ok := requestErr.Err.(*openapi3.SchemaError); ok {
 		_ = respondJSON(w, http.StatusBadRequest, rootError{
 			Error: errorAggregate{
@@ -118,7 +131,11 @@ func reportRequestError(w http.ResponseWriter, requestErr *openapi3filter.Reques
 	respondErrorJSON(w, http.StatusBadRequest, requestErr)
 }
 
-func reportResponseError(w http.ResponseWriter, responseErr *openapi3filter.ResponseError) {
+func defaultReportResponseError(w http.ResponseWriter, err error) {
+	responseErr, ok := err.(*openapi3filter.ResponseError)
+	if !ok {
+		return
+	}
 	if schemaErr, ok := responseErr.Err.(*openapi3.SchemaError); ok {
 		_ = respondJSON(w, http.StatusInternalServerError, rootError{
 			Error: errorAggregate{
