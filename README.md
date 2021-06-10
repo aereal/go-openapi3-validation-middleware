@@ -23,7 +23,7 @@ import (
 
 func main() {
 	var router routers.Router // must be built with certain way
-	mw := openapi3middleware.WithValidation(router)
+	mw := openapi3middleware.WithValidation(openapi3middleware.MiddlewareOptions{Router: router})
 	http.Handle("/", mw(http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
 		// this handler is called if validation succeeds
 	})))
