@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -196,20 +195,4 @@ func testHTTPHeader(expected, got http.Header) error {
 		return fmt.Errorf("got=%q expected=%q", gotBuf.String(), expectedBuf.String())
 	}
 	return nil
-}
-
-func newResponse(status int, header map[string]string, body string) *http.Response {
-	resp := &http.Response{
-		Status:     http.StatusText(status),
-		StatusCode: status,
-		Body:       ioutil.NopCloser(strings.NewReader(body)),
-		Header:     http.Header{},
-	}
-	for k, v := range header {
-		resp.Header.Set(k, v)
-	}
-	contentLength := len(body)
-	resp.ContentLength = int64(contentLength)
-	resp.Header.Set("content-length", strconv.Itoa(contentLength))
-	return resp
 }
