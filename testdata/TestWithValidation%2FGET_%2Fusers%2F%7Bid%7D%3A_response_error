@@ -1,0 +1,12 @@
+HTTP/1.1 500 Internal Server Error
+Content-Length: 263
+Content-Type: application/json
+Date: Thu, 10 Jun 2021 12:58:45 GMT
+
+{"error":{"response":{"reason":"property \"id\" is missing","field":"required","value":{"age":17,"name":"aereal"},"schema":{"properties":{"age":{"type":"integer"},"id":{"type":"string"},"name":{"type":"string"}},"required":["id","name","age"],"type":"object"}}}}
+HTTP/1.1 500 Internal Server Error
+Content-Length: 263
+Content-Type: application/json
+Date: Thu, 10 Jun 2021 13:15:21 GMT
+
+{"error":{"response":{"reason":"property \"id\" is missing","field":"required","value":{"age":17,"name":"aereal"},"schema":{"properties":{"age":{"type":"integer"},"id":{"type":"string"},"name":{"type":"string"}},"required":["id","name","age"],"type":"object"}}}}
