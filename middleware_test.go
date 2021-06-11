@@ -94,8 +94,7 @@ func TestWithValidation(t *testing.T) {
 		{
 			name: "POST /users: request error",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("content-type", "application/json")
-				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				panic("should not reach here")
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodPost, origin+"/users", map[string]string{"content-type": "application/json"}, `{"name":"aereal","age":"abc"}`))
