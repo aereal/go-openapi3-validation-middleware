@@ -1,0 +1,6 @@
+HTTP/1.1 400 Bad Request
+Content-Length: 84
+Content-Type: text/plain
+Date: Fri, 11 Jun 2021 06:57:59 GMT
+
+the custom response validation error handler is called: errTypeOK=true, request=true
