@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/legacy"
 )
 
@@ -37,9 +38,11 @@ func TestWithValidation(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name    string
-		handler http.Handler
-		request func(origin string) *http.Request
+		name           string
+		handler        http.Handler
+		request        func(origin string) *http.Request
+		reqErrReporter func(w http.ResponseWriter, r *http.Request, err error)
+		resErrReporter func(w http.ResponseWriter, r *http.Request, err error)
 	}{
 		{
 			name: "GET /users/{id}: ok",
@@ -62,6 +65,23 @@ func TestWithValidation(t *testing.T) {
 			},
 		},
 		{
+			name: "GET /users/{id}: response error with custom error handler",
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("content-type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": "aereal", "age": 17})
+			}),
+			request: func(origin string) *http.Request {
+				return mustRequest(newRequest(http.MethodGet, origin+"/users/123", map[string]string{}, ""))
+			},
+			resErrReporter: func(w http.ResponseWriter, r *http.Request, err error) {
+				requestNonNil := r != nil
+				_, errTypeOK := err.(*openapi3filter.ResponseError)
+				w.Header().Set("content-type", "text/plain")
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = fmt.Fprintf(w, "the custom response validation error handler is called: errTypeOK=%t, request=%t", errTypeOK, requestNonNil)
+			},
+		},
+		{
 			name: "POST /users: ok",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
@@ -74,17 +94,37 @@ func TestWithValidation(t *testing.T) {
 		{
 			name: "POST /users: request error",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("content-type", "application/json")
-				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				panic("should not reach here")
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodPost, origin+"/users", map[string]string{"content-type": "application/json"}, `{"name":"aereal","age":"abc"}`))
 			},
 		},
+		{
+			name: "POST /users: request error with custom error handler",
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				panic("should not reach here")
+			}),
+			request: func(origin string) *http.Request {
+				return mustRequest(newRequest(http.MethodPost, origin+"/users", map[string]string{"content-type": "application/json"}, `{"name":"aereal","age":"abc"}`))
+			},
+			reqErrReporter: func(w http.ResponseWriter, r *http.Request, err error) {
+				requestNonNil := r != nil
+				_, errTypeOK := err.(*openapi3filter.RequestError)
+				w.Header().Set("content-type", "text/plain")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = fmt.Fprintf(w, "the custom response validation error handler is called: errTypeOK=%t, request=%t", errTypeOK, requestNonNil)
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			srv := httptest.NewServer(WithValidation(MiddlewareOptions{Router: router})(testCase.handler))
+			mw := WithValidation(MiddlewareOptions{
+				Router:                        router,
+				ReportRequestValidationError:  testCase.reqErrReporter,
+				ReportResponseValidationError: testCase.resErrReporter,
+			})
+			srv := httptest.NewServer(mw(testCase.handler))
 			defer srv.Close()
 			gotResp, err := srv.Client().Do(testCase.request(srv.URL))
 			if err != nil {

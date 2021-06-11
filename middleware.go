@@ -14,21 +14,21 @@ type middleware = func(next http.Handler) http.Handler
 
 type MiddlewareOptions struct {
 	Router                        routers.Router
-	ReportRequestValidationError  func(w http.ResponseWriter, err error)
-	ReportResponseValidationError func(w http.ResponseWriter, err error)
+	ReportRequestValidationError  func(w http.ResponseWriter, r *http.Request, err error)
+	ReportResponseValidationError func(w http.ResponseWriter, r *http.Request, err error)
 }
 
-func (o MiddlewareOptions) reportReqError(w http.ResponseWriter, err error) {
+func (o MiddlewareOptions) reportReqError(w http.ResponseWriter, r *http.Request, err error) {
 	if f := o.ReportRequestValidationError; f != nil {
-		f(w, err)
+		f(w, r, err)
 		return
 	}
 	defaultReportRequestError(w, err)
 }
 
-func (o MiddlewareOptions) reportRespError(w http.ResponseWriter, err error) {
+func (o MiddlewareOptions) reportRespError(w http.ResponseWriter, r *http.Request, err error) {
 	if f := o.ReportResponseValidationError; f != nil {
-		f(w, err)
+		f(w, r, err)
 		return
 	}
 	defaultReportResponseError(w, err)
@@ -67,7 +67,7 @@ func WithResponseValidation(options MiddlewareOptions) middleware {
 			bodyBytes := irw.buf.Bytes()
 			input.SetBodyBytes(bodyBytes)
 			if err := openapi3filter.ValidateResponse(ctx, input); err != nil {
-				options.reportRespError(w, err)
+				options.reportRespError(w, r, err)
 				return
 			}
 			irw.emit()
@@ -87,7 +87,7 @@ func WithRequestValidation(options MiddlewareOptions) middleware {
 			}
 			ctx := r.Context()
 			if err := openapi3filter.ValidateRequest(ctx, input); err != nil {
-				options.reportReqError(w, err)
+				options.reportReqError(w, r, err)
 				return
 			}
 			next.ServeHTTP(w, r)
