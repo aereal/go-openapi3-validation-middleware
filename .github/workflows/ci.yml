@@ -20,6 +20,7 @@ jobs:
           - 1.14.x
           - 1.15.x
           - 1.16.x
+          - 1.17.x
         os:
           - ubuntu-latest
     runs-on: ${{ matrix.os }}
@@ -37,4 +38,4 @@ jobs:
       - name: test
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
       - uses: codecov/codecov-action@v1
-        if: matrix.os == 'ubuntu-latest' && matrix.go_version == '1.16.x'
+        if: matrix.os == 'ubuntu-latest' && matrix.go_version == '1.17.x'
