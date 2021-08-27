@@ -14,8 +14,17 @@ type middleware = func(next http.Handler) http.Handler
 
 type MiddlewareOptions struct {
 	Router                        routers.Router
+	ReportFindRouteError          func(w http.ResponseWriter, r *http.Request, err error)
 	ReportRequestValidationError  func(w http.ResponseWriter, r *http.Request, err error)
 	ReportResponseValidationError func(w http.ResponseWriter, r *http.Request, err error)
+}
+
+func (o MiddlewareOptions) reportFindRouteError(w http.ResponseWriter, r *http.Request, err error) {
+	if f := o.ReportFindRouteError; f != nil {
+		f(w, r, err)
+		return
+	}
+	defaultReportFindRouteError(w, err)
 }
 
 func (o MiddlewareOptions) reportReqError(w http.ResponseWriter, r *http.Request, err error) {
@@ -52,7 +61,10 @@ func WithResponseValidation(options MiddlewareOptions) middleware {
 			irw := newBufferingResponseWriter(w)
 			next.ServeHTTP(irw, r)
 			ri, err := buildRequestValidationInputFromRequest(options.Router, r)
-			if err != nil {
+			if frErr, ok := err.(*findRouteErr); ok {
+				options.reportFindRouteError(w, r, frErr.Unwrap())
+				return
+			} else if err != nil {
 				respondErrorJSON(w, http.StatusInternalServerError, err)
 				return
 			}
@@ -81,7 +93,10 @@ func WithRequestValidation(options MiddlewareOptions) middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			input, err := buildRequestValidationInputFromRequest(options.Router, r)
-			if err != nil {
+			if frErr, ok := err.(*findRouteErr); ok {
+				options.reportFindRouteError(w, r, frErr.Unwrap())
+				return
+			} else if err != nil {
 				respondErrorJSON(w, http.StatusInternalServerError, err)
 				return
 			}
@@ -95,10 +110,22 @@ func WithRequestValidation(options MiddlewareOptions) middleware {
 	}
 }
 
+type findRouteErr struct {
+	err error
+}
+
+func (e *findRouteErr) Unwrap() error {
+	return e.err
+}
+
+func (e *findRouteErr) Error() string {
+	return e.err.Error()
+}
+
 func buildRequestValidationInputFromRequest(router routers.Router, r *http.Request) (*openapi3filter.RequestValidationInput, error) {
 	route, pathParams, err := router.FindRoute(r)
 	if err != nil {
-		return nil, err
+		return nil, &findRouteErr{err: err}
 	}
 	input := &openapi3filter.RequestValidationInput{
 		Request:    r,
@@ -114,6 +141,10 @@ type report struct {
 	Value       interface{}      `json:"value"`
 	Schema      *openapi3.Schema `json:"schema"`
 	OriginError string           `json:"origin,omitempty"`
+}
+
+func defaultReportFindRouteError(w http.ResponseWriter, err error) {
+	respondErrorJSON(w, http.StatusInternalServerError, err)
 }
 
 func defaultReportRequestError(w http.ResponseWriter, err error) {
