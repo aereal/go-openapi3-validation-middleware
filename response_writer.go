@@ -19,7 +19,7 @@ func (rw *bufferingResponseWriter) emit() {
 	if rw.statusCode != 0 {
 		rw.rw.WriteHeader(rw.statusCode)
 	}
-	_, _ = rw.rw.Write(rw.buf.Bytes())
+	_, _ = rw.buf.WriteTo(rw.rw)
 }
 
 func (rw *bufferingResponseWriter) Write(b []byte) (int, error) {

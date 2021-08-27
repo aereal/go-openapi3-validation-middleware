@@ -18,7 +18,8 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
-	"github.com/getkin/kin-openapi/routers/legacy"
+	"github.com/getkin/kin-openapi/routers"
+	"github.com/getkin/kin-openapi/routers/gorillamux"
 )
 
 type user struct {
@@ -32,17 +33,18 @@ func TestWithValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := legacy.NewRouter(doc)
+	router, err := gorillamux.NewRouter(doc)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	testCases := []struct {
-		name           string
-		handler        http.Handler
-		request        func(origin string) *http.Request
-		reqErrReporter func(w http.ResponseWriter, r *http.Request, err error)
-		resErrReporter func(w http.ResponseWriter, r *http.Request, err error)
+		name             string
+		handler          http.Handler
+		request          func(origin string) *http.Request
+		routeErrReporter func(w http.ResponseWriter, r *http.Request, err error)
+		reqErrReporter   func(w http.ResponseWriter, r *http.Request, err error)
+		resErrReporter   func(w http.ResponseWriter, r *http.Request, err error)
 	}{
 		{
 			name: "GET /users/{id}: ok",
@@ -79,6 +81,40 @@ func TestWithValidation(t *testing.T) {
 				w.Header().Set("content-type", "text/plain")
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = fmt.Fprintf(w, "the custom response validation error handler is called: errTypeOK=%t, request=%t", errTypeOK, requestNonNil)
+			},
+		},
+		{
+			name: "GET /unknown: find route error (not found)",
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("content-type", "application/json")
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+			}),
+			request: func(origin string) *http.Request {
+				return mustRequest(newRequest(http.MethodGet, origin+"/unknown", map[string]string{}, ""))
+			},
+			routeErrReporter: func(w http.ResponseWriter, r *http.Request, err error) {
+				requestNonNil := r != nil
+				errTypeOK := errors.Is(err, routers.ErrPathNotFound)
+				w.Header().Set("content-type", "text/plain")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = fmt.Fprintf(w, "the custom find route error handler is called: errTypeOK=%t, request=%t", errTypeOK, requestNonNil)
+			},
+		},
+		{
+			name: "GET /users: find route error (method not allowed)",
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("content-type", "application/json")
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+			}),
+			request: func(origin string) *http.Request {
+				return mustRequest(newRequest(http.MethodGet, origin+"/users", map[string]string{}, ""))
+			},
+			routeErrReporter: func(w http.ResponseWriter, r *http.Request, err error) {
+				requestNonNil := r != nil
+				errTypeOK := errors.Is(err, routers.ErrMethodNotAllowed)
+				w.Header().Set("content-type", "text/plain")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				_, _ = fmt.Fprintf(w, "the custom find route error handler is called: errTypeOK=%t, request=%t", errTypeOK, requestNonNil)
 			},
 		},
 		{
@@ -121,6 +157,7 @@ func TestWithValidation(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			mw := WithValidation(MiddlewareOptions{
 				Router:                        router,
+				ReportFindRouteError:          testCase.routeErrReporter,
 				ReportRequestValidationError:  testCase.reqErrReporter,
 				ReportResponseValidationError: testCase.resErrReporter,
 			})
