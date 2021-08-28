@@ -37,5 +37,5 @@ jobs:
             ${{ runner.os }}-go-${{ matrix.go_version }}
       - name: test
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v2
         if: matrix.os == 'ubuntu-latest' && matrix.go_version == '1.17.x'
