@@ -14,6 +14,7 @@ type middleware = func(next http.Handler) http.Handler
 
 type MiddlewareOptions struct {
 	Router                        routers.Router
+	ValidationOptions             *openapi3filter.Options
 	ReportFindRouteError          func(w http.ResponseWriter, r *http.Request, err error)
 	ReportRequestValidationError  func(w http.ResponseWriter, r *http.Request, err error)
 	ReportResponseValidationError func(w http.ResponseWriter, r *http.Request, err error)
@@ -60,7 +61,7 @@ func WithResponseValidation(options MiddlewareOptions) middleware {
 			ctx := r.Context()
 			irw := newBufferingResponseWriter(w)
 			next.ServeHTTP(irw, r)
-			ri, err := buildRequestValidationInputFromRequest(options.Router, r)
+			ri, err := buildRequestValidationInputFromRequest(options.Router, r, options.ValidationOptions)
 			if frErr, ok := err.(*findRouteErr); ok {
 				options.reportFindRouteError(w, r, frErr.Unwrap())
 				return
@@ -92,7 +93,7 @@ func WithResponseValidation(options MiddlewareOptions) middleware {
 func WithRequestValidation(options MiddlewareOptions) middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			input, err := buildRequestValidationInputFromRequest(options.Router, r)
+			input, err := buildRequestValidationInputFromRequest(options.Router, r, options.ValidationOptions)
 			if frErr, ok := err.(*findRouteErr); ok {
 				options.reportFindRouteError(w, r, frErr.Unwrap())
 				return
@@ -122,7 +123,7 @@ func (e *findRouteErr) Error() string {
 	return e.err.Error()
 }
 
-func buildRequestValidationInputFromRequest(router routers.Router, r *http.Request) (*openapi3filter.RequestValidationInput, error) {
+func buildRequestValidationInputFromRequest(router routers.Router, r *http.Request, options *openapi3filter.Options) (*openapi3filter.RequestValidationInput, error) {
 	route, pathParams, err := router.FindRoute(r)
 	if err != nil {
 		return nil, &findRouteErr{err: err}
@@ -131,6 +132,7 @@ func buildRequestValidationInputFromRequest(router routers.Router, r *http.Reque
 		Request:    r,
 		PathParams: pathParams,
 		Route:      route,
+		Options:    options,
 	}
 	return input, nil
 }
