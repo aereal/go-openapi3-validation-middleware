@@ -30,6 +30,24 @@ jobs:
         with:
           go-version: ${{ matrix.go_version }}
       - name: test
-        run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
-      - uses: codecov/codecov-action@v3
+        run: go test -race -coverprofile=cover.out -covermode=atomic ./...
+      - uses: actions/upload-artifact@v3
         if: matrix.os == 'ubuntu-latest' && matrix.go_version == '1.17.x'
+        with:
+          name: coverage
+          path: ./cover.out
+          if-no-files-found: error
+  report-coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    needs:
+      - test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v3
+        with:
+          name: coverage
+      - uses: k1LoW/octocov-action@v0
