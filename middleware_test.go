@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -242,12 +242,12 @@ func testResponse(expected, got *http.Response) error {
 	if got.StatusCode != expected.StatusCode {
 		return fmt.Errorf("StatusCode: got=%d expected=%d", got.StatusCode, expected.StatusCode)
 	}
-	expectedBody, _ := ioutil.ReadAll(expected.Body)
-	gotBody, _ := ioutil.ReadAll(got.Body)
+	expectedBody, _ := io.ReadAll(expected.Body)
+	gotBody, _ := io.ReadAll(got.Body)
 	defer func() {
 		// rewind body
-		expected.Body = ioutil.NopCloser(bytes.NewReader(expectedBody))
-		got.Body = ioutil.NopCloser(bytes.NewReader(gotBody))
+		expected.Body = io.NopCloser(bytes.NewReader(expectedBody))
+		got.Body = io.NopCloser(bytes.NewReader(gotBody))
 	}()
 	if string(expectedBody) != string(gotBody) {
 		return fmt.Errorf("body: got=%s expected=%s", gotBody, expectedBody)
