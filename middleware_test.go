@@ -250,7 +250,7 @@ func testResponse(expected, got *http.Response) error {
 		got.Body = io.NopCloser(bytes.NewReader(gotBody))
 	}()
 	if string(expectedBody) != string(gotBody) {
-		return fmt.Errorf("body: got=%s expected=%s", gotBody, expectedBody)
+		return fmt.Errorf("body:\ngot=%s\nexpected=%s", gotBody, expectedBody)
 	}
 	if err := testHTTPHeader(expected.Header, got.Header); err != nil {
 		return err
