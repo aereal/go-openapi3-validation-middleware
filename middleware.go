@@ -2,6 +2,7 @@ package openapi3middleware
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -62,7 +63,7 @@ func WithResponseValidation(options MiddlewareOptions) middleware {
 			irw := newBufferingResponseWriter(w)
 			next.ServeHTTP(irw, r)
 			ri, err := buildRequestValidationInputFromRequest(options.Router, r, options.ValidationOptions)
-			if frErr, ok := err.(*findRouteErr); ok {
+			if frErr := new(findRouteErr); errors.As(err, &frErr) {
 				options.reportFindRouteError(w, r, frErr.Unwrap())
 				return
 			} else if err != nil {
@@ -94,7 +95,7 @@ func WithRequestValidation(options MiddlewareOptions) middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			input, err := buildRequestValidationInputFromRequest(options.Router, r, options.ValidationOptions)
-			if frErr, ok := err.(*findRouteErr); ok {
+			if frErr := new(findRouteErr); errors.As(err, &frErr) {
 				options.reportFindRouteError(w, r, frErr.Unwrap())
 				return
 			} else if err != nil {
@@ -150,11 +151,12 @@ func defaultReportFindRouteError(w http.ResponseWriter, err error) {
 }
 
 func defaultReportRequestError(w http.ResponseWriter, err error) {
-	requestErr, ok := err.(*openapi3filter.RequestError)
-	if !ok {
+	requestErr := new(openapi3filter.RequestError)
+	if !errors.As(err, &requestErr) {
 		return
 	}
-	if schemaErr, ok := requestErr.Err.(*openapi3.SchemaError); ok {
+	schemaErr := new(openapi3.SchemaError)
+	if errors.As(requestErr.Err, &schemaErr) {
 		_ = respondJSON(w, http.StatusBadRequest, rootError{
 			Error: errorAggregate{
 				Request: toReport(schemaErr),
@@ -165,11 +167,11 @@ func defaultReportRequestError(w http.ResponseWriter, err error) {
 }
 
 func defaultReportResponseError(w http.ResponseWriter, err error) {
-	responseErr, ok := err.(*openapi3filter.ResponseError)
-	if !ok {
+	responseErr := new(openapi3filter.ResponseError)
+	if !errors.As(err, &responseErr) {
 		return
 	}
-	if schemaErr, ok := responseErr.Err.(*openapi3.SchemaError); ok {
+	if schemaErr := new(openapi3.SchemaError); errors.As(responseErr.Err, &schemaErr) {
 		_ = respondJSON(w, http.StatusInternalServerError, rootError{
 			Error: errorAggregate{
 				Response: toReport(schemaErr),

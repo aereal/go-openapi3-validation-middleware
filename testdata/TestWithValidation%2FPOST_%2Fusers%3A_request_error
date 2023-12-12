@@ -1,6 +1,6 @@
 HTTP/1.1 400 Bad Request
-Content-Length: 142
+Content-Length: 117
 Content-Type: application/json
-Date: Thu, 10 Jun 2021 13:29:08 GMT
+Date: Tue, 12 Dec 2023 12:22:48 GMT
 
-{"error":{"request":{"reason":"Field must be set to integer or not be present","field":"type","value":"string","schema":{"type":"integer"}}}}
+{"error":{"request":{"reason":"value must be an integer","field":"type","value":"abc","schema":{"type":"integer"}}}}
