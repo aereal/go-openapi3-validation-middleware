@@ -22,6 +22,19 @@ import (
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 )
 
+var router routers.Router
+
+func init() {
+	doc, err := openapi3.NewLoader().LoadFromFile("./testdata/user-account-service.openapi.json")
+	if err != nil {
+		panic(err)
+	}
+	router, err = gorillamux.NewRouter(doc)
+	if err != nil {
+		panic(err)
+	}
+}
+
 type user struct {
 	Name string `json:"name"`
 	ID   string `json:"id"`
@@ -29,15 +42,6 @@ type user struct {
 }
 
 func TestWithValidation(t *testing.T) {
-	doc, err := openapi3.NewLoader().LoadFromFile("./testdata/user-account-service.openapi.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	router, err := gorillamux.NewRouter(doc)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	testCases := []struct {
 		name             string
 		handler          http.Handler
