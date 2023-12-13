@@ -3,6 +3,7 @@ package openapi3middleware
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +21,25 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var router routers.Router
+
+func init() {
+	doc, err := openapi3.NewLoader().LoadFromFile("./testdata/user-account-service.openapi.json")
+	if err != nil {
+		panic(err)
+	}
+	router, err = gorillamux.NewRouter(doc)
+	if err != nil {
+		panic(err)
+	}
+}
 
 type user struct {
 	Name string `json:"name"`
@@ -29,15 +48,6 @@ type user struct {
 }
 
 func TestWithValidation(t *testing.T) {
-	doc, err := openapi3.NewLoader().LoadFromFile("./testdata/user-account-service.openapi.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	router, err := gorillamux.NewRouter(doc)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	testCases := []struct {
 		name             string
 		handler          http.Handler
@@ -173,6 +183,82 @@ func TestWithValidation(t *testing.T) {
 			}
 			if err := testResponse(expectedResp, gotResp); err != nil {
 				t.Error(err)
+			}
+		})
+	}
+}
+
+func TestWithValidation_otel(t *testing.T) {
+	testCases := []struct {
+		name         string
+		buildOptions func(tp trace.TracerProvider) MiddlewareOptions
+		wantSpans    int
+	}{
+		{
+			name: "ok/explicitly passing TracerProvider",
+			buildOptions: func(tp trace.TracerProvider) MiddlewareOptions {
+				return MiddlewareOptions{
+					Router:         router,
+					TracerProvider: tp,
+				}
+			},
+			wantSpans: 3,
+		},
+		{
+			name: "ok/use TracerProvider comes from the current span",
+			buildOptions: func(_ trace.TracerProvider) MiddlewareOptions {
+				return MiddlewareOptions{Router: router}
+			},
+			wantSpans: 3,
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			if deadline, ok := t.Deadline(); ok {
+				ctx, cancel = context.WithDeadline(ctx, deadline)
+			}
+			defer cancel()
+
+			exporter := tracetest.NewInMemoryExporter()
+			tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exporter))
+
+			withOtel := func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+					ctx, span := tp.Tracer("test").Start(ctx, fmt.Sprintf("%s %s", r.Method, r.URL.Path))
+					defer span.End()
+					next.ServeHTTP(w, r.WithContext(ctx))
+				})
+			}
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("content-type", "application/json")
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+			})
+			srv := httptest.NewServer(withOtel(WithValidation(tc.buildOptions(tp))(handler)))
+			defer srv.Close()
+
+			req := mustRequest(newRequest(http.MethodPost, srv.URL+"/users", map[string]string{"content-type": "application/json"}, `{"name":"aereal","age":17}`))
+			resp, err := srv.Client().Do(req.WithContext(ctx))
+			if err != nil {
+				t.Fatalf("http.Client.Do: %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("unexpected status code: %d", resp.StatusCode)
+			}
+
+			if err := tp.ForceFlush(ctx); err != nil {
+				t.Fatal(err)
+			}
+			spans := exporter.GetSpans()
+			t.Logf("%d spans got", len(spans))
+			for i, span := range spans {
+				t.Logf("#%d: %#v", i, span)
+			}
+			if len(spans) != tc.wantSpans {
+				t.Errorf("spans count:\nwant: %d\ngot: %d", tc.wantSpans, len(spans))
 			}
 		})
 	}
