@@ -1,6 +1,7 @@
 package openapi3middleware
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type middleware = func(next http.Handler) http.Handler
@@ -19,6 +22,7 @@ type MiddlewareOptions struct {
 	ReportFindRouteError          func(w http.ResponseWriter, r *http.Request, err error)
 	ReportRequestValidationError  func(w http.ResponseWriter, r *http.Request, err error)
 	ReportResponseValidationError func(w http.ResponseWriter, r *http.Request, err error)
+	TracerProvider                trace.TracerProvider
 }
 
 func (o MiddlewareOptions) reportFindRouteError(w http.ResponseWriter, r *http.Request, err error) {
@@ -60,13 +64,18 @@ func WithResponseValidation(options MiddlewareOptions) middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
+			ctx, span := getTracer(ctx, options).Start(ctx, "ResponseValidation")
+			defer span.End()
 			irw := newBufferingResponseWriter(w)
-			next.ServeHTTP(irw, r)
+			next.ServeHTTP(irw, r.WithContext(ctx))
 			ri, err := buildRequestValidationInputFromRequest(options.Router, r, options.ValidationOptions)
 			if frErr := new(findRouteErr); errors.As(err, &frErr) {
-				options.reportFindRouteError(w, r, frErr.Unwrap())
+				actualErr := frErr.Unwrap()
+				span.RecordError(actualErr)
+				options.reportFindRouteError(w, r, actualErr)
 				return
 			} else if err != nil {
+				span.RecordError(err)
 				respondErrorJSON(w, http.StatusInternalServerError, err)
 				return
 			}
@@ -81,6 +90,7 @@ func WithResponseValidation(options MiddlewareOptions) middleware {
 			bodyBytes := irw.buf.Bytes()
 			input.SetBodyBytes(bodyBytes)
 			if err := openapi3filter.ValidateResponse(ctx, input); err != nil {
+				span.RecordError(err)
 				options.reportRespError(w, r, err)
 				return
 			}
@@ -94,20 +104,26 @@ func WithResponseValidation(options MiddlewareOptions) middleware {
 func WithRequestValidation(options MiddlewareOptions) middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			ctx, span := getTracer(ctx, options).Start(ctx, "RequestValidation")
+			defer span.End()
 			input, err := buildRequestValidationInputFromRequest(options.Router, r, options.ValidationOptions)
 			if frErr := new(findRouteErr); errors.As(err, &frErr) {
-				options.reportFindRouteError(w, r, frErr.Unwrap())
+				actualErr := frErr.Unwrap()
+				span.RecordError(actualErr)
+				options.reportFindRouteError(w, r, actualErr)
 				return
 			} else if err != nil {
+				span.RecordError(err)
 				respondErrorJSON(w, http.StatusInternalServerError, err)
 				return
 			}
-			ctx := r.Context()
 			if err := openapi3filter.ValidateRequest(ctx, input); err != nil {
+				span.RecordError(err)
 				options.reportReqError(w, r, err)
 				return
 			}
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
@@ -217,4 +233,18 @@ func respondJSON(w http.ResponseWriter, statusCode int, payload interface{}) err
 	w.Header().Set("content-type", "application/json")
 	w.WriteHeader(statusCode)
 	return json.NewEncoder(w).Encode(payload)
+}
+
+const tracerName = "github.com/aereal/go-openapi3-validation-middleware"
+
+func getTracer(ctx context.Context, opts MiddlewareOptions) trace.Tracer {
+	tp := opts.TracerProvider
+	if tp == nil {
+		if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+			tp = span.TracerProvider()
+		} else {
+			tp = otel.GetTracerProvider()
+		}
+	}
+	return tp.Tracer(tracerName)
 }
