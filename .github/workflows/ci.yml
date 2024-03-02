@@ -29,7 +29,7 @@ jobs:
           go-version: ${{ matrix.go_version }}
       - name: test
         run: go test -race -coverprofile=cover.out -covermode=atomic ./...
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: strategy.job-index == 0
         with:
           name: coverage
@@ -45,7 +45,7 @@ jobs:
       - test
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: coverage
       - uses: k1LoW/octocov-action@v0
