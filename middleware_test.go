@@ -49,18 +49,18 @@ type user struct {
 
 func TestWithValidation(t *testing.T) {
 	testCases := []struct {
-		name             string
 		handler          http.Handler
 		request          func(origin string) *http.Request
 		routeErrReporter func(w http.ResponseWriter, r *http.Request, err error)
 		reqErrReporter   func(w http.ResponseWriter, r *http.Request, err error)
 		resErrReporter   func(w http.ResponseWriter, r *http.Request, err error)
+		name             string
 	}{
 		{
 			name: "GET /users/{id}: ok",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"}) //nolint:errcheck,errchkjson
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodGet, origin+"/users/123", map[string]string{}, ""))
@@ -70,7 +70,7 @@ func TestWithValidation(t *testing.T) {
 			name: "GET /users/{id}: response error",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": "aereal", "age": 17})
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": "aereal", "age": 17}) //nolint:errcheck,errchkjson
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodGet, origin+"/users/123", map[string]string{}, ""))
@@ -80,14 +80,15 @@ func TestWithValidation(t *testing.T) {
 			name: "GET /users/{id}: response error with custom error handler",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": "aereal", "age": 17})
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": "aereal", "age": 17}) //nolint:errcheck,errchkjson
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodGet, origin+"/users/123", map[string]string{}, ""))
 			},
 			resErrReporter: func(w http.ResponseWriter, r *http.Request, err error) {
 				requestNonNil := r != nil
-				_, errTypeOK := err.(*openapi3filter.ResponseError)
+				respErr := new(openapi3filter.ResponseError)
+				errTypeOK := errors.As(err, &respErr)
 				w.Header().Set("content-type", "text/plain")
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = fmt.Fprintf(w, "the custom response validation error handler is called: errTypeOK=%t, request=%t", errTypeOK, requestNonNil)
@@ -97,7 +98,7 @@ func TestWithValidation(t *testing.T) {
 			name: "GET /unknown: find route error (not found)",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"}) //nolint:errcheck,errchkjson
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodGet, origin+"/unknown", map[string]string{}, ""))
@@ -114,7 +115,7 @@ func TestWithValidation(t *testing.T) {
 			name: "GET /users: find route error (method not allowed)",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"}) //nolint:errcheck,errchkjson
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodGet, origin+"/users", map[string]string{}, ""))
@@ -131,7 +132,7 @@ func TestWithValidation(t *testing.T) {
 			name: "POST /users: ok",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"}) //nolint:errcheck,errchkjson
 			}),
 			request: func(origin string) *http.Request {
 				return mustRequest(newRequest(http.MethodPost, origin+"/users", map[string]string{"content-type": "application/json"}, `{"name":"aereal","age":17}`))
@@ -156,7 +157,8 @@ func TestWithValidation(t *testing.T) {
 			},
 			reqErrReporter: func(w http.ResponseWriter, r *http.Request, err error) {
 				requestNonNil := r != nil
-				_, errTypeOK := err.(*openapi3filter.RequestError)
+				reqErr := new(openapi3filter.RequestError)
+				errTypeOK := errors.As(err, &reqErr)
 				w.Header().Set("content-type", "text/plain")
 				w.WriteHeader(http.StatusBadRequest)
 				_, _ = fmt.Fprintf(w, "the custom response validation error handler is called: errTypeOK=%t, request=%t", errTypeOK, requestNonNil)
@@ -177,10 +179,12 @@ func TestWithValidation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			t.Cleanup(func() { gotResp.Body.Close() })
 			expectedResp, err := resumeResponse(t.Name(), gotResp)
 			if err != nil {
 				t.Fatal(err)
 			}
+			t.Cleanup(func() { expectedResp.Body.Close() })
 			if err := testResponse(expectedResp, gotResp); err != nil {
 				t.Error(err)
 			}
@@ -190,8 +194,8 @@ func TestWithValidation(t *testing.T) {
 
 func TestWithValidation_otel(t *testing.T) {
 	testCases := []struct {
-		name         string
 		buildOptions func(tp trace.TracerProvider) MiddlewareOptions
+		name         string
 		wantSpans    int
 	}{
 		{
@@ -226,15 +230,15 @@ func TestWithValidation_otel(t *testing.T) {
 
 			withOtel := func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-					ctx, span := tp.Tracer("test").Start(ctx, fmt.Sprintf("%s %s", r.Method, r.URL.Path))
+					reqCtx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+					reqCtx, span := tp.Tracer("test").Start(reqCtx, fmt.Sprintf("%s %s", r.Method, r.URL.Path))
 					defer span.End()
-					next.ServeHTTP(w, r.WithContext(ctx))
+					next.ServeHTTP(w, r.WithContext(reqCtx))
 				})
 			}
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("content-type", "application/json")
-				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"})
+				_ = json.NewEncoder(w).Encode(user{Name: "aereal", Age: 17, ID: "123"}) //nolint:errcheck,errchkjson
 			})
 			srv := httptest.NewServer(withOtel(WithValidation(tc.buildOptions(tp))(handler)))
 			defer srv.Close()
@@ -328,8 +332,14 @@ func testResponse(expected, got *http.Response) error {
 	if got.StatusCode != expected.StatusCode {
 		return fmt.Errorf("StatusCode: got=%d expected=%d", got.StatusCode, expected.StatusCode)
 	}
-	expectedBody, _ := io.ReadAll(expected.Body)
-	gotBody, _ := io.ReadAll(got.Body)
+	expectedBody, err := io.ReadAll(expected.Body)
+	if err != nil {
+		return err
+	}
+	gotBody, err := io.ReadAll(got.Body)
+	if err != nil {
+		return err
+	}
 	defer func() {
 		// rewind body
 		expected.Body = io.NopCloser(bytes.NewReader(expectedBody))

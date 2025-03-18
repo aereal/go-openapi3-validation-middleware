@@ -173,7 +173,7 @@ func defaultReportRequestError(w http.ResponseWriter, err error) {
 	}
 	schemaErr := new(openapi3.SchemaError)
 	if errors.As(requestErr.Err, &schemaErr) {
-		_ = respondJSON(w, http.StatusBadRequest, rootError{
+		_ = respondJSON(w, http.StatusBadRequest, rootError{ //nolint:errcheck
 			Error: errorAggregate{
 				Request: toReport(schemaErr),
 			}})
@@ -188,7 +188,7 @@ func defaultReportResponseError(w http.ResponseWriter, err error) {
 		return
 	}
 	if schemaErr := new(openapi3.SchemaError); errors.As(responseErr.Err, &schemaErr) {
-		_ = respondJSON(w, http.StatusInternalServerError, rootError{
+		_ = respondJSON(w, http.StatusInternalServerError, rootError{ //nolint:errcheck
 			Error: errorAggregate{
 				Response: toReport(schemaErr),
 			}})
@@ -226,7 +226,7 @@ func respondErrorJSON(w http.ResponseWriter, statusCode int, err error) {
 	type payload struct {
 		Error *errorStruct
 	}
-	_ = respondJSON(w, statusCode, payload{Error: &errorStruct{Message: err.Error(), Kind: fmt.Sprintf("%T", err)}})
+	_ = respondJSON(w, statusCode, payload{Error: &errorStruct{Message: err.Error(), Kind: fmt.Sprintf("%T", err)}}) //nolint:errcheck
 }
 
 func respondJSON(w http.ResponseWriter, statusCode int, payload interface{}) error {
