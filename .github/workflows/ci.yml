@@ -7,7 +7,14 @@ on:
     branches:
       - main
 jobs:
-  test:
+  ok:
+    needs:
+      - test-lint
+    if: ${{ failure() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - run: exit 1
+  test-lint:
     strategy:
       matrix:
         go_version:
