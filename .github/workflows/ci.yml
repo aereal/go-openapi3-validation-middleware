@@ -29,7 +29,7 @@ jobs:
           go-version: ${{ matrix.go_version }}
       - name: test
         run: go test -race -coverprofile=cover.out -covermode=atomic ./...
-      - uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5 # v3.2.1
+      - uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         if: strategy.job-index == 0
         with:
           name: coverage
@@ -45,7 +45,7 @@ jobs:
       - test
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
+      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           name: coverage
-      - uses: k1LoW/octocov-action@7a27b0b5cd308ab8b5096a9ef1ba701502a1ce6a # v0.62.6
+      - uses: k1LoW/octocov-action@1ad702b3118b6a055c00b01db68ca0d9f6641dbc # v1.4.0
